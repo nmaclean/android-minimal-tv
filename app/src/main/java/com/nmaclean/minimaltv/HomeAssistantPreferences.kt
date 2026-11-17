@@ -22,7 +22,7 @@ class HomeAssistantPreferences internal constructor(
         prefs.edit()
             .putString(KEY_URL, normalizedUrl)
             .putString(KEY_TOKEN, trimmedToken)
-            .apply()
+            .commit()
     }
 
     companion object {

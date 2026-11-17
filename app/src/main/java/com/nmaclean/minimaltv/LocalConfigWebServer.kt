@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Handler
 import android.os.Looper
+import java.io.BufferedInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
@@ -94,61 +95,67 @@ class LocalConfigWebServer(
     private fun handleClient(client: Socket) {
         client.use { socket ->
             socket.soTimeout = 10_000
-            val input = socket.getInputStream()
+            val input = BufferedInputStream(socket.getInputStream())
             val output = socket.getOutputStream()
 
-            val requestLine = readLine(input) ?: return
-            val parts = requestLine.split(" ")
-            if (parts.size < 2) {
-                writeHtmlResponse(output, 400, "Bad Request", errorHtml("Malformed HTTP request."))
-                return
-            }
+            try {
+                val requestLine = readLine(input) ?: return
+                val parts = requestLine.split(" ")
+                if (parts.size < 2) {
+                    writeHtmlResponse(output, 400, "Bad Request", errorHtml("Malformed HTTP request."))
+                    return
+                }
 
-            val method = parts[0].uppercase()
-            val rawPath = parts[1].substringBefore("?")
+                val method = parts[0].uppercase()
+                val rawPath = parts[1].substringBefore("?")
 
-            var contentLength = 0
-            while (true) {
-                val headerLine = readLine(input) ?: break
-                if (headerLine.isEmpty()) break
-                val colonIndex = headerLine.indexOf(':')
-                if (colonIndex > 0) {
-                    val name = headerLine.substring(0, colonIndex).trim()
-                    val value = headerLine.substring(colonIndex + 1).trim()
-                    if (name.equals("Content-Length", ignoreCase = true)) {
-                        contentLength = value.toIntOrNull()?.coerceIn(0, MAX_BODY_BYTES) ?: 0
+                var contentLength = 0
+                while (true) {
+                    val headerLine = readLine(input) ?: break
+                    if (headerLine.isEmpty()) break
+                    val colonIndex = headerLine.indexOf(':')
+                    if (colonIndex > 0) {
+                        val name = headerLine.substring(0, colonIndex).trim()
+                        val value = headerLine.substring(colonIndex + 1).trim()
+                        if (name.equals("Content-Length", ignoreCase = true)) {
+                            contentLength = value.toIntOrNull()?.coerceIn(0, MAX_BODY_BYTES) ?: 0
+                        }
                     }
                 }
-            }
 
-            val body = if (contentLength > 0) {
-                val buffer = ByteArray(contentLength)
-                var totalRead = 0
-                while (totalRead < contentLength) {
-                    val read = input.read(buffer, totalRead, contentLength - totalRead)
-                    if (read == -1) break
-                    totalRead += read
+                val body = if (contentLength > 0) {
+                    val buffer = ByteArray(contentLength)
+                    var totalRead = 0
+                    while (totalRead < contentLength) {
+                        val read = input.read(buffer, totalRead, contentLength - totalRead)
+                        if (read == -1) break
+                        totalRead += read
+                    }
+                    String(buffer, 0, totalRead, StandardCharsets.UTF_8)
+                } else {
+                    ""
                 }
-                String(buffer, 0, totalRead, StandardCharsets.UTF_8)
-            } else {
-                ""
-            }
 
-            when {
-                method == "GET" && (rawPath == "/" || rawPath == "/index.html") -> {
-                    writeHtmlResponse(output, 200, "OK", buildFormHtml(preferences.getUrl()))
-                }
-                method == "POST" && rawPath == "/save" -> {
-                    val result = handleSavePost(body, preferences)
-                    if (result.success) {
-                        mainThreadPoster { onConfigSaved(result.savedUrl) }
-                        writeHtmlResponse(output, 200, "OK", savedHtml(result.savedUrl))
-                    } else {
-                        writeHtmlResponse(output, 400, "Bad Request", errorHtml(result.message))
+                when {
+                    method == "GET" && (rawPath == "/" || rawPath == "/index.html") -> {
+                        writeHtmlResponse(output, 200, "OK", buildFormHtml(preferences.getUrl()))
+                    }
+                    method == "POST" && rawPath == "/save" -> {
+                        val result = handleSavePost(body, preferences)
+                        if (result.success) {
+                            mainThreadPoster { onConfigSaved(result.savedUrl) }
+                            writeHtmlResponse(output, 200, "OK", savedHtml(result.savedUrl))
+                        } else {
+                            writeHtmlResponse(output, 400, "Bad Request", errorHtml(result.message))
+                        }
+                    }
+                    else -> {
+                        writeHtmlResponse(output, 404, "Not Found", errorHtml("Page not found."))
                     }
                 }
-                else -> {
-                    writeHtmlResponse(output, 404, "Not Found", errorHtml("Page not found."))
+            } catch (e: Exception) {
+                runCatching {
+                    writeHtmlResponse(output, 500, "Internal Server Error", errorHtml(e.message ?: "Unexpected server error."))
                 }
             }
         }

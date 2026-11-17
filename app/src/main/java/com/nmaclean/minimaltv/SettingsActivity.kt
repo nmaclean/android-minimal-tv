@@ -18,6 +18,7 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import java.util.concurrent.Executors
 
@@ -292,6 +293,7 @@ class SettingsActivity : AppCompatActivity() {
                 onConfigSaved = { savedUrl ->
                     populateCurrentConfig()
                     showHaStatus("Saved from browser for $savedUrl", isError = false)
+                    Toast.makeText(this, "Saved Home Assistant config from browser", Toast.LENGTH_LONG).show()
                 }
             )
             val port = server.start()
