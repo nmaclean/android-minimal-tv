@@ -2,7 +2,9 @@ package com.nmaclean.minimaltv
 
 import android.app.AlertDialog
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Handler
@@ -78,6 +80,12 @@ class UpdatePromptDialog(private val context: Context) {
 
         dialog = alertDialog
         alertDialog.show()
+
+        alertDialog.window?.setBackgroundDrawable(GradientDrawable().apply {
+            cornerRadius = 16f * density
+            setColor(Color.parseColor("#131E33"))
+            setStroke((1.5f * density).toInt(), Color.parseColor("#24324D"))
+        })
 
         alertDialog.getButton(AlertDialog.BUTTON_POSITIVE)?.let { applyTvFocusStyle(it) }
         alertDialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.let { applyTvFocusStyle(it) }
@@ -329,27 +337,49 @@ class UpdatePromptDialog(private val context: Context) {
 
     private fun applyTvFocusStyle(button: Button) {
         val density = context.resources.displayMetrics.density
-        val radius = 8f * density
-        val padH = (16 * density).toInt()
-        val padV = (8 * density).toInt()
+        val radius = 12f * density
+        val padH = (18 * density).toInt()
+        val padV = (9 * density).toInt()
+        val marginH = (6 * density).toInt()
 
         val focusedBg = GradientDrawable().apply {
             cornerRadius = radius
-            setColor(Color.parseColor("#1D2D49"))
-            setStroke((2 * density).toInt(), Color.parseColor("#00E5FF"))
+            setColor(Color.parseColor("#00E5FF"))
+            setStroke((2 * density).toInt(), Color.WHITE)
         }
         val defaultBg = GradientDrawable().apply {
             cornerRadius = radius
             setColor(Color.parseColor("#162238"))
+            setStroke((1.5f * density).toInt(), Color.parseColor("#24324D"))
         }
         val states = StateListDrawable().apply {
             addState(intArrayOf(android.R.attr.state_focused), focusedBg)
             addState(intArrayOf(android.R.attr.state_selected), focusedBg)
             addState(intArrayOf(), defaultBg)
         }
+        val textColors = ColorStateList(
+            arrayOf(
+                intArrayOf(android.R.attr.state_focused),
+                intArrayOf(android.R.attr.state_selected),
+                intArrayOf()
+            ),
+            intArrayOf(
+                Color.parseColor("#060A12"),
+                Color.parseColor("#060A12"),
+                Color.parseColor("#F3F6FC")
+            )
+        )
+        button.backgroundTintList = null
         button.background = states
-        button.setTextColor(Color.WHITE)
+        button.setTextColor(textColors)
+        button.typeface = Typeface.DEFAULT_BOLD
+        button.isAllCaps = false
         button.setPadding(padH, padV, padH, padV)
+        (button.layoutParams as? ViewGroup.MarginLayoutParams)?.let { lp ->
+            lp.leftMargin = marginH
+            lp.rightMargin = marginH
+            button.layoutParams = lp
+        }
     }
 
     private fun showError(message: String) {
