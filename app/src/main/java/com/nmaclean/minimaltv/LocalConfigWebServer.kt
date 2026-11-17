@@ -94,7 +94,7 @@ class LocalConfigWebServer(
 
     private fun handleClient(client: Socket) {
         client.use { socket ->
-            socket.soTimeout = 10_000
+            socket.soTimeout = 30_000
             val input = BufferedInputStream(socket.getInputStream())
             val output = socket.getOutputStream()
 
@@ -110,6 +110,8 @@ class LocalConfigWebServer(
                 val rawPath = parts[1].substringBefore("?")
 
                 var contentLength = 0
+                var expectContinue = false
+                var isChunked = false
                 while (true) {
                     val headerLine = readLine(input) ?: break
                     if (headerLine.isEmpty()) break
@@ -117,23 +119,26 @@ class LocalConfigWebServer(
                     if (colonIndex > 0) {
                         val name = headerLine.substring(0, colonIndex).trim()
                         val value = headerLine.substring(colonIndex + 1).trim()
-                        if (name.equals("Content-Length", ignoreCase = true)) {
-                            contentLength = value.toIntOrNull()?.coerceIn(0, MAX_BODY_BYTES) ?: 0
+                        when {
+                            name.equals("Content-Length", ignoreCase = true) ->
+                                contentLength = value.toIntOrNull()?.coerceIn(0, MAX_BODY_BYTES) ?: 0
+                            name.equals("Expect", ignoreCase = true) && value.contains("100-continue", ignoreCase = true) ->
+                                expectContinue = true
+                            name.equals("Transfer-Encoding", ignoreCase = true) && value.contains("chunked", ignoreCase = true) ->
+                                isChunked = true
                         }
                     }
                 }
 
-                val body = if (contentLength > 0) {
-                    val buffer = ByteArray(contentLength)
-                    var totalRead = 0
-                    while (totalRead < contentLength) {
-                        val read = input.read(buffer, totalRead, contentLength - totalRead)
-                        if (read == -1) break
-                        totalRead += read
-                    }
-                    String(buffer, 0, totalRead, StandardCharsets.UTF_8)
-                } else {
-                    ""
+                if (expectContinue) {
+                    output.write("HTTP/1.1 100 Continue\r\n\r\n".toByteArray(StandardCharsets.US_ASCII))
+                    output.flush()
+                }
+
+                val body = when {
+                    isChunked -> readChunkedBody(input)
+                    contentLength > 0 -> readFixedBody(input, contentLength)
+                    else -> ""
                 }
 
                 when {
@@ -159,6 +164,37 @@ class LocalConfigWebServer(
                 }
             }
         }
+    }
+
+    private fun readFixedBody(input: InputStream, contentLength: Int): String {
+        val buffer = ByteArray(contentLength)
+        var totalRead = 0
+        while (totalRead < contentLength) {
+            val read = input.read(buffer, totalRead, contentLength - totalRead)
+            if (read == -1) break
+            totalRead += read
+        }
+        return String(buffer, 0, totalRead, StandardCharsets.UTF_8)
+    }
+
+    private fun readChunkedBody(input: InputStream): String {
+        val out = ByteArrayOutputStream()
+        while (true) {
+            val sizeLine = readLine(input)?.substringBefore(";")?.trim() ?: break
+            val chunkSize = sizeLine.toIntOrNull(16) ?: break
+            if (chunkSize <= 0) break
+            var remaining = chunkSize.coerceAtMost(MAX_BODY_BYTES - out.size())
+            val buf = ByteArray(4096)
+            while (remaining > 0) {
+                val read = input.read(buf, 0, minOf(buf.size, remaining))
+                if (read == -1) break
+                out.write(buf, 0, read)
+                remaining -= read
+            }
+            readLine(input) // trailing CRLF after chunk
+            if (out.size() >= MAX_BODY_BYTES) break
+        }
+        return out.toString(StandardCharsets.UTF_8.name())
     }
 
     private fun readLine(input: InputStream): String? {
@@ -199,7 +235,7 @@ class LocalConfigWebServer(
 
     companion object {
         const val DEFAULT_PORT = 8080
-        private const val MAX_HEADER_LINE_BYTES = 8192
+        private const val MAX_HEADER_LINE_BYTES = 65536
         private const val MAX_BODY_BYTES = 65536
 
         fun parseFormUrlEncoded(body: String): Map<String, String> {
