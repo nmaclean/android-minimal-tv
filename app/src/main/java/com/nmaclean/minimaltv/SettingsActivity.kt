@@ -41,6 +41,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var downloadInstallButton: TextView
     private lateinit var localServerBanner: TextView
     private lateinit var toggleWebServerButton: TextView
+    private lateinit var scrollView: ScrollView
+    private lateinit var appCard: LinearLayout
 
     private var localConfigWebServer: LocalConfigWebServer? = null
     private var pendingApkUrl: String? = null
@@ -52,7 +54,7 @@ class SettingsActivity : AppCompatActivity() {
         supportActionBar?.hide()
         preferences = HomeAssistantPreferences(this)
 
-        val scrollView = ScrollView(this).apply {
+        scrollView = ScrollView(this).apply {
             setBackgroundColor(Color.parseColor("#0B1221"))
             isFillViewport = true
         }
@@ -212,7 +214,7 @@ class SettingsActivity : AppCompatActivity() {
         root.addView(haCard)
 
         // --- Section 2: App Info & Updates ---
-        val appCard = createSectionCard("APP INFO & UPDATES").apply {
+        appCard = createSectionCard("APP INFO & UPDATES").apply {
             (layoutParams as LinearLayout.LayoutParams).topMargin = dpToPx(20)
         }
 
@@ -383,16 +385,21 @@ class SettingsActivity : AppCompatActivity() {
     private fun runUpdateCheck() {
         if (isCheckingUpdate || isDownloadingApk) return
         isCheckingUpdate = true
+        checkUpdatesButton.isEnabled = false
+        checkUpdatesButton.alpha = 0.6f
         pendingApkUrl = null
         downloadInstallButton.visibility = View.GONE
         releaseNotesView.visibility = View.GONE
         updateStatusView.setTextColor(Color.parseColor("#94A3B8"))
         updateStatusView.text = "Checking GitHub Releases..."
+        scrollView.post { scrollView.smoothScrollTo(0, appCard.bottom) }
 
         ioExecutor.execute {
             val result = GitHubUpdater.checkForUpdate(BuildConfig.VERSION_NAME)
             mainHandler.post {
                 isCheckingUpdate = false
+                checkUpdatesButton.isEnabled = true
+                checkUpdatesButton.alpha = 1.0f
                 when (result) {
                     is GitHubUpdater.UpdateCheckResult.Available -> {
                         pendingApkUrl = result.apkUrl
@@ -417,6 +424,7 @@ class SettingsActivity : AppCompatActivity() {
                         updateStatusView.text = result.message
                     }
                 }
+                scrollView.post { scrollView.smoothScrollTo(0, appCard.bottom) }
             }
         }
     }
@@ -555,7 +563,8 @@ class SettingsActivity : AppCompatActivity() {
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             isFocusable = true
-            isFocusableInTouchMode = true
+            isFocusableInTouchMode = false
+            isClickable = true
             setPadding(dpToPx(20), 0, dpToPx(20), 0)
             background = createPillBackground(focused = false)
             layoutParams = LinearLayout.LayoutParams(
