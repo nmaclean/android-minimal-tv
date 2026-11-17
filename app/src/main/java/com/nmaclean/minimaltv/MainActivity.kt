@@ -75,10 +75,6 @@ class MainActivity : ComponentActivity() {
                 MinimalTvShell()
             }
         }
-
-        if (!homeAssistantPreferences.isConfigured()) {
-            openConfig()
-        }
     }
 
     @Composable
