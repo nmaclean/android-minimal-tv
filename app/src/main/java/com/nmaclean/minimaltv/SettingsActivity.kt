@@ -35,19 +35,13 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var testConnectionButton: TextView
     private lateinit var saveButton: TextView
 
-    private lateinit var updateStatusView: TextView
-    private lateinit var releaseNotesView: TextView
     private lateinit var checkUpdatesButton: TextView
-    private lateinit var downloadInstallButton: TextView
     private lateinit var localServerBanner: TextView
     private lateinit var toggleWebServerButton: TextView
     private lateinit var scrollView: ScrollView
     private lateinit var appCard: LinearLayout
 
     private var localConfigWebServer: LocalConfigWebServer? = null
-    private var pendingApkUrl: String? = null
-    private var isCheckingUpdate = false
-    private var isDownloadingApk = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -242,26 +236,19 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         checkUpdatesButton = createPillButton("Check for Updates") {
-            runUpdateCheck()
+            UpdatePromptDialog(this).show()
         }.apply {
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 dpToPx(42)
-            ).apply { rightMargin = dpToPx(14) }
-        }
-
-        downloadInstallButton = createPillButton("Download & Install") {
-            runDownloadAndInstall()
-        }.apply {
-            visibility = View.GONE
+            )
         }
 
         updateActionsRow.addView(checkUpdatesButton)
-        updateActionsRow.addView(downloadInstallButton)
         appCard.addView(updateActionsRow)
 
-        updateStatusView = TextView(this).apply {
-            text = "Repository: nmaclean/android-minimal-tv"
+        val repoInfoView = TextView(this).apply {
+            text = "Repository: nmaclean/android-minimal-tv • Tap Check for Updates to update or roll back"
             textSize = 13f
             setTextColor(Color.parseColor("#94A3B8"))
             layoutParams = LinearLayout.LayoutParams(
@@ -269,20 +256,7 @@ class SettingsActivity : AppCompatActivity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             ).apply { topMargin = dpToPx(12) }
         }
-        appCard.addView(updateStatusView)
-
-        releaseNotesView = TextView(this).apply {
-            textSize = 12f
-            setTextColor(Color.parseColor("#CBD5E1"))
-            visibility = View.GONE
-            setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12))
-            background = createInputBackground(focused = false)
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dpToPx(10) }
-        }
-        appCard.addView(releaseNotesView)
+        appCard.addView(repoInfoView)
 
         root.addView(appCard)
         scrollView.addView(root)
@@ -378,91 +352,6 @@ class SettingsActivity : AppCompatActivity() {
             mainHandler.post {
                 testConnectionButton.isEnabled = true
                 showHaStatus(result.message, isError = !result.success)
-            }
-        }
-    }
-
-    private fun runUpdateCheck() {
-        if (isCheckingUpdate || isDownloadingApk) return
-        isCheckingUpdate = true
-        checkUpdatesButton.isEnabled = false
-        checkUpdatesButton.alpha = 0.6f
-        pendingApkUrl = null
-        downloadInstallButton.visibility = View.GONE
-        releaseNotesView.visibility = View.GONE
-        updateStatusView.setTextColor(Color.parseColor("#94A3B8"))
-        updateStatusView.text = "Checking GitHub Releases..."
-        scrollView.post { scrollView.smoothScrollTo(0, appCard.bottom) }
-
-        ioExecutor.execute {
-            val result = GitHubUpdater.checkForUpdate(BuildConfig.VERSION_NAME)
-            mainHandler.post {
-                isCheckingUpdate = false
-                checkUpdatesButton.isEnabled = true
-                checkUpdatesButton.alpha = 1.0f
-                when (result) {
-                    is GitHubUpdater.UpdateCheckResult.Available -> {
-                        pendingApkUrl = result.apkUrl
-                        updateStatusView.setTextColor(Color.parseColor("#00E5FF"))
-                        updateStatusView.text = if (result.apkUrl != null) {
-                            "Update available: ${result.releaseName} (${result.latestVersion})"
-                        } else {
-                            "Update ${result.latestVersion} found, but no APK asset is attached."
-                        }
-                        releaseNotesView.text = result.releaseNotes
-                        releaseNotesView.visibility = View.VISIBLE
-                        downloadInstallButton.visibility = if (result.apkUrl != null) View.VISIBLE else View.GONE
-                    }
-                    is GitHubUpdater.UpdateCheckResult.UpToDate -> {
-                        updateStatusView.setTextColor(Color.parseColor("#22C55E"))
-                        updateStatusView.text = "Up to date (installed ${result.currentVersion}, latest ${result.latestVersion})"
-                        releaseNotesView.text = result.releaseNotes
-                        releaseNotesView.visibility = View.VISIBLE
-                    }
-                    is GitHubUpdater.UpdateCheckResult.Error -> {
-                        updateStatusView.setTextColor(Color.parseColor("#F87171"))
-                        updateStatusView.text = result.message
-                    }
-                }
-                scrollView.post { scrollView.smoothScrollTo(0, appCard.bottom) }
-            }
-        }
-    }
-
-    private fun runDownloadAndInstall() {
-        val apkUrl = pendingApkUrl ?: return
-        if (isDownloadingApk) return
-        isDownloadingApk = true
-        downloadInstallButton.isEnabled = false
-        updateStatusView.setTextColor(Color.parseColor("#00E5FF"))
-        updateStatusView.text = "Downloading update... 0%"
-
-        ioExecutor.execute {
-            try {
-                val apkFile = GitHubUpdater.downloadApk(this, apkUrl) { pct ->
-                    mainHandler.post {
-                        updateStatusView.text = "Downloading update... $pct%"
-                    }
-                }
-                mainHandler.post {
-                    isDownloadingApk = false
-                    downloadInstallButton.isEnabled = true
-                    val launchedInstaller = GitHubUpdater.installApk(this, apkFile)
-                    if (launchedInstaller) {
-                        updateStatusView.setTextColor(Color.parseColor("#22C55E"))
-                        updateStatusView.text = "Download complete. Launching installer..."
-                    } else {
-                        updateStatusView.setTextColor(Color.parseColor("#00E5FF"))
-                        updateStatusView.text = "Allow 'Install unknown apps' in Settings, then tap Download & Install again."
-                    }
-                }
-            } catch (e: Exception) {
-                mainHandler.post {
-                    isDownloadingApk = false
-                    downloadInstallButton.isEnabled = true
-                    updateStatusView.setTextColor(Color.parseColor("#F87171"))
-                    updateStatusView.text = e.localizedMessage ?: "Failed to download update"
-                }
             }
         }
     }
