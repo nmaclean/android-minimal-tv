@@ -64,7 +64,7 @@ object MidnightCyanTokens {
     val OverscanHorizontal: Dp = 48.dp
     val OverscanVertical: Dp = 24.dp
     val RailCollapsedWidth: Dp = 64.dp
-    val RailExpandedWidth: Dp = 140.dp
+    val RailExpandedWidth: Dp = 172.dp
     val FocusBorderWidth: Dp = 2.dp
     val CardCornerRadius: Dp = 12.dp
 
