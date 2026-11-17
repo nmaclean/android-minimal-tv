@@ -1,0 +1,14 @@
+<resources>
+    <style name="Theme.MinimalTV" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/electric_cyan</item>
+        <item name="colorPrimaryVariant">@color/midnight_card_surface</item>
+        <item name="colorOnPrimary">@color/midnight_bg_bottom</item>
+        <item name="colorSecondary">@color/electric_cyan</item>
+        <item name="colorSecondaryVariant">@color/midnight_card_elevated</item>
+        <item name="colorOnSecondary">@color/midnight_bg_bottom</item>
+        <item name="colorAccent">@color/electric_cyan</item>
+        <item name="android:windowBackground">@color/midnight_bg_top</item>
+        <item name="android:statusBarColor">@color/midnight_bg_top</item>
+        <item name="android:navigationBarColor">@color/midnight_bg_bottom</item>
+    </style>
+</resources>
