@@ -109,12 +109,14 @@ class MainActivity : ComponentActivity() {
                         apps = apps,
                         youTubeApp = apps.firstOrNull { it.packageName == YOUTUBE_PACKAGE },
                         onLaunchApp = launchApp,
-                        onSearchYouTube = { voiceAssistantManager.searchYouTube(it) }
+                        onSearchYouTube = { voiceAssistantManager.searchYouTube(it) },
+                        weatherText = dashboard.weatherText
                     )
                     TvNavDestination.INPUTS -> InputsScreen(
                         inputs = inputs,
                         onSelectInput = { TvInputRepository.launchInput(this@MainActivity, it) },
-                        onOpenSystemInputs = { TvInputRepository.openSystemInputs(this@MainActivity) }
+                        onOpenSystemInputs = { TvInputRepository.openSystemInputs(this@MainActivity) },
+                        weatherText = dashboard.weatherText
                     )
                     TvNavDestination.SMART_HOME -> SmartHomeScreen(
                         dashboard = dashboard,

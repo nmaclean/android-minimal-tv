@@ -43,6 +43,7 @@ fun InputsScreen(
     inputs: List<TvInputEntry>,
     onSelectInput: (TvInputEntry) -> Unit,
     onOpenSystemInputs: () -> Unit,
+    weatherText: String? = null,
     modifier: Modifier = Modifier
 ) {
     val firstFocus = remember { FocusRequester() }
@@ -76,7 +77,7 @@ fun InputsScreen(
                     fontSize = 14.sp
                 )
             }
-            LiveClockHeader()
+            LiveClockHeader(weatherText = weatherText)
         }
 
         Spacer(modifier = Modifier.height(22.dp))

@@ -108,7 +108,7 @@ fun AppsScreen(
                 )
             }
             Spacer(modifier = Modifier.width(24.dp))
-            LiveClockHeader()
+            LiveClockHeader(weatherText = dashboard.weatherText)
         }
 
         Spacer(modifier = Modifier.height(20.dp))

@@ -58,7 +58,7 @@ fun SmartHomeScreen(
                     fontSize = 14.sp
                 )
             }
-            LiveClockHeader()
+            LiveClockHeader(weatherText = dashboard.weatherText)
         }
 
         Spacer(modifier = Modifier.height(24.dp))

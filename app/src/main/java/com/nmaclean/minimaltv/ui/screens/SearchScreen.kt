@@ -70,6 +70,7 @@ fun SearchScreen(
     youTubeApp: AppEntry?,
     onLaunchApp: (AppEntry) -> Unit,
     onSearchYouTube: (String) -> Unit,
+    weatherText: String? = null,
     modifier: Modifier = Modifier
 ) {
     var query by remember { mutableStateOf("") }
@@ -157,7 +158,7 @@ fun SearchScreen(
                     )
                 }
             }
-            LiveClockHeader()
+            LiveClockHeader(weatherText = weatherText)
         }
 
         Spacer(modifier = Modifier.height(16.dp))

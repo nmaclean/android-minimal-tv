@@ -6,7 +6,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -125,10 +128,13 @@ fun Modifier.focusCyanBorder(
 }
 
 /**
- * Top-right live clock: `HH:mm` above `EEEE, d MMMM`.
+ * Top-right live clock: optional weather + `HH:mm` above `EEEE, d MMMM`.
  */
 @Composable
-fun LiveClockHeader(modifier: Modifier = Modifier) {
+fun LiveClockHeader(
+    weatherText: String? = null,
+    modifier: Modifier = Modifier
+) {
     var nowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -145,15 +151,35 @@ fun LiveClockHeader(modifier: Modifier = Modifier) {
         modifier = modifier.widthIn(min = 150.dp),
         horizontalAlignment = Alignment.End
     ) {
-        Text(
-            text = timeFormat.format(currentDate),
-            color = MidnightCyanTokens.TextPrimary,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Light,
-            letterSpacing = 0.5.sp,
-            maxLines = 1,
-            softWrap = false
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (!weatherText.isNullOrBlank()) {
+                Text(
+                    text = weatherText,
+                    color = MidnightCyanTokens.TextSecondary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Normal,
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "/",
+                    color = MidnightCyanTokens.DividerSubtle,
+                    fontSize = 20.sp,
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+            }
+            Text(
+                text = timeFormat.format(currentDate),
+                color = MidnightCyanTokens.TextPrimary,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Light,
+                letterSpacing = 0.5.sp,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
         Text(
             text = dateFormat.format(currentDate),
             color = MidnightCyanTokens.TextSecondary,
