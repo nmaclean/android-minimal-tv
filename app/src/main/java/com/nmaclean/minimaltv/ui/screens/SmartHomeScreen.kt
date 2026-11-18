@@ -3,6 +3,7 @@ package com.nmaclean.minimaltv.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.nmaclean.minimaltv.DashboardData
@@ -210,76 +213,79 @@ private fun SmartHomeDetailModal(
     }
     val lights = if (kind == SmartHomeDetailKind.CLIMATE_LIGHTS) dashboard.details.lights else emptyList()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xCC060A12))
-            .clickable(onClick = onDismiss),
-        contentAlignment = Alignment.Center
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .widthIn(min = 520.dp, max = 720.dp)
-                .fillMaxHeight(0.84f)
-                .clip(RoundedCornerShape(16.dp))
-                .background(MidnightCyanTokens.ModalBg)
-                .focusCyanBorder(isFocused = false, cornerRadius = 16.dp)
-                .clickable(enabled = false) {}
-                .padding(24.dp)
+                .fillMaxSize()
+                .background(Color(0xCC060A12)),
+            contentAlignment = Alignment.Center
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .widthIn(min = 520.dp, max = 720.dp)
+                    .fillMaxHeight(0.84f)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MidnightCyanTokens.ModalBg)
+                    .focusCyanBorder(isFocused = false, cornerRadius = 16.dp)
+                    .padding(24.dp)
             ) {
-                Text(
-                    text = kind.title,
-                    color = MidnightCyanTokens.CyanAccent,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-                TvPillButton(
-                    label = "Close",
-                    selected = false,
-                    onClick = onDismiss,
-                    modifier = Modifier.focusRequester(closeFocus)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(bottom = 12.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                if (lights.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = "LIGHTS (PRESS OK TO TOGGLE)",
-                            color = MidnightCyanTokens.CyanAccent,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp
-                        )
-                    }
-                    items(lights, key = { it.entityId }) { light ->
-                        LightControlRow(light = light, onToggle = { onToggleLight(light.entityId) })
-                    }
-                    item {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "TEMPERATURES & WEATHER",
-                            color = MidnightCyanTokens.CyanAccent,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp
-                        )
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = kind.title,
+                        color = MidnightCyanTokens.CyanAccent,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    TvPillButton(
+                        label = "Close",
+                        selected = false,
+                        onClick = onDismiss,
+                        modifier = Modifier.focusRequester(closeFocus)
+                    )
                 }
 
-                items(rows) { row ->
-                    DetailKeyValueRow(row = row)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 12.dp, start = 4.dp, end = 4.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (lights.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "LIGHTS (PRESS OK TO TOGGLE)",
+                                color = MidnightCyanTokens.CyanAccent,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp
+                            )
+                        }
+                        items(lights, key = { it.entityId }) { light ->
+                            LightControlRow(light = light, onToggle = { onToggleLight(light.entityId) })
+                        }
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "TEMPERATURES & WEATHER",
+                                color = MidnightCyanTokens.CyanAccent,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.8.sp
+                            )
+                        }
+                    }
+
+                    items(rows) { row ->
+                        DetailKeyValueRow(row = row)
+                    }
                 }
             }
         }
@@ -332,11 +338,15 @@ private fun LightControlRow(light: HaLightItem, onToggle: () -> Unit) {
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun DetailKeyValueRow(row: HaDetailRow) {
+    var focused by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .focusCyanBorder(isFocused = focused, cornerRadius = 10.dp)
             .clip(RoundedCornerShape(10.dp))
-            .background(MidnightCyanTokens.CardBg)
+            .background(if (focused) MidnightCyanTokens.CardBgElevated else MidnightCyanTokens.CardBg)
+            .onFocusChanged { focused = it.isFocused }
+            .focusable()
             .padding(horizontal = 16.dp, vertical = 11.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
