@@ -120,7 +120,8 @@ class MainActivity : ComponentActivity() {
                     )
                     TvNavDestination.SMART_HOME -> SmartHomeScreen(
                         dashboard = dashboard,
-                        haConfigured = haConfigured
+                        haConfigured = haConfigured,
+                        onToggleLight = { homeAssistantManager.toggleLight(it) }
                     )
                     TvNavDestination.APPS, TvNavDestination.SETTINGS -> AppsScreen(
                         apps = apps,

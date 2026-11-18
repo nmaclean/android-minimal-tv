@@ -1,6 +1,7 @@
 package com.nmaclean.minimaltv.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,12 +29,13 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 import com.nmaclean.minimaltv.DashboardData
+import com.nmaclean.minimaltv.HaDetailRow
 import com.nmaclean.minimaltv.ui.theme.MidnightCyanTokens
 import com.nmaclean.minimaltv.ui.theme.focusCyanBorder
 
 /**
- * Slate Home Assistant metric card: header + status dot, large value, cyan/amber progress, footer.
- * When [focusable] is true it participates in D-pad navigation and shows the cyan focus ring.
+ * Slate Home Assistant metric card: header + status dot, large value, cyan/amber progress,
+ * optional extra detail rows, and footer.
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -45,7 +47,9 @@ fun HaMetricCard(
     modifier: Modifier = Modifier,
     accent: Color = MidnightCyanTokens.CyanAccent,
     compact: Boolean = false,
-    focusable: Boolean = false
+    focusable: Boolean = false,
+    extraRows: List<HaDetailRow> = emptyList(),
+    onClick: (() -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(MidnightCyanTokens.CardCornerRadius)
@@ -56,7 +60,13 @@ fun HaMetricCard(
             .clip(shape)
             .background(if (isFocused) MidnightCyanTokens.CardBgElevated else MidnightCyanTokens.CardBg)
             .onFocusChanged { isFocused = it.isFocused }
-            .then(if (focusable) Modifier.focusable() else Modifier)
+            .then(
+                when {
+                    onClick != null -> Modifier.clickable(onClick = onClick)
+                    focusable -> Modifier.focusable()
+                    else -> Modifier
+                }
+            )
             .padding(horizontal = 18.dp, vertical = if (compact) 12.dp else 18.dp)
     ) {
         CardHeader(title = title, dotColor = MidnightCyanTokens.SuccessGreen)
@@ -64,20 +74,45 @@ fun HaMetricCard(
         Text(
             text = value,
             color = MidnightCyanTokens.TextPrimary,
-            fontSize = if (compact) 22.sp else 34.sp,
+            fontSize = if (compact) 22.sp else 32.sp,
             fontWeight = FontWeight.Bold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(modifier = Modifier.height(if (compact) 6.dp else 12.dp))
+        Spacer(modifier = Modifier.height(if (compact) 6.dp else 10.dp))
         CyanProgressBar(
             progressPercent = progressPercent,
             fillColor = accent,
             thickness = if (compact) 4.dp else 6.dp
         )
-        Spacer(modifier = Modifier.height(if (compact) 6.dp else 12.dp))
+        if (!compact && extraRows.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(10.dp))
+            extraRows.forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = row.label,
+                        color = MidnightCyanTokens.TextSecondary,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = row.value,
+                        color = if (row.highlight) MidnightCyanTokens.CyanAccent else MidnightCyanTokens.TextPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(if (compact) 6.dp else 10.dp))
         Text(
-            text = footer,
+            text = if (!compact && onClick != null) "$footer • Press OK for details" else footer,
             color = MidnightCyanTokens.TextMuted,
             fontSize = 12.sp,
             maxLines = if (compact) 1 else 2,
@@ -92,7 +127,8 @@ fun HaPhonesCard(
     data: DashboardData,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
-    focusable: Boolean = false
+    focusable: Boolean = false,
+    onClick: (() -> Unit)? = null
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val shape = RoundedCornerShape(MidnightCyanTokens.CardCornerRadius)
@@ -103,7 +139,13 @@ fun HaPhonesCard(
             .clip(shape)
             .background(if (isFocused) MidnightCyanTokens.CardBgElevated else MidnightCyanTokens.CardBg)
             .onFocusChanged { isFocused = it.isFocused }
-            .then(if (focusable) Modifier.focusable() else Modifier)
+            .then(
+                when {
+                    onClick != null -> Modifier.clickable(onClick = onClick)
+                    focusable -> Modifier.focusable()
+                    else -> Modifier
+                }
+            )
             .padding(horizontal = 18.dp, vertical = if (compact) 12.dp else 18.dp),
         verticalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 8.dp)
     ) {
@@ -111,6 +153,15 @@ fun HaPhonesCard(
         PhoneRow("NEIL", data.neilPct, compact)
         PhoneRow("HYSLA", data.hyslaPct, compact)
         PhoneRow("FINN", data.finnPct, compact)
+        if (!compact && onClick != null) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Press OK for presence & details",
+                color = MidnightCyanTokens.TextMuted,
+                fontSize = 12.sp,
+                maxLines = 1
+            )
+        }
     }
 }
 

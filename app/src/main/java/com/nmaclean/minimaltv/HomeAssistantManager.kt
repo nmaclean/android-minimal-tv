@@ -45,6 +45,35 @@ class HomeAssistantManager(
         haHandler.removeCallbacks(haPollRunnable)
     }
 
+    fun toggleLight(entityId: String) {
+        if (!preferences.isConfigured()) return
+        val baseUrl = preferences.getUrl()
+        val haToken = preferences.getToken()
+
+        Thread {
+            var conn: HttpURLConnection? = null
+            try {
+                val url = URL("$baseUrl/api/services/light/toggle")
+                conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    setRequestProperty("Authorization", "Bearer $haToken")
+                    setRequestProperty("Content-Type", "application/json")
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                }
+                val payload = JSONObject().put("entity_id", entityId).toString()
+                conn.outputStream.use { it.write(payload.toByteArray(Charsets.UTF_8)) }
+                conn.responseCode
+            } catch (_: Exception) {
+                // ignore; next poll will reflect state
+            } finally {
+                conn?.disconnect()
+            }
+            fetchStates()
+        }.start()
+    }
+
     private fun fetchStates() {
         if (!preferences.isConfigured()) {
             mainHandler.post {
@@ -202,19 +231,58 @@ class HomeAssistantManager(
         // 1. Solar & Battery
         val pvLiveWatts = stateMap["sensor.smartsolar_charger_mppt_150_35_id_278_pv_yield_power"]
             ?.optString("state")?.toDoubleOrNull()?.toInt() ?: 0
+        val pvLiveText = valWithUnit("sensor.smartsolar_charger_mppt_150_35_id_278_pv_yield_power", 0)
         val solarToday = valWithUnit("sensor.smartsolar_charger_mppt_150_35_id_278_yield_today", 1)
         val battSoc = valWithUnit("sensor.pylontech_battery_id_512_charge", 0)
         val solarProgress = battSoc.replace("%", "").trim().toIntOrNull() ?: 0
         val acLoad = valWithUnit("sensor.gx_device_consumption_power_l1", 0)
-        val solarFooter = "Load $acLoad • Today $solarToday"
+        val solarFooter = "PV $pvLiveText • Load $acLoad • Today $solarToday"
+
+        val solarRows = buildList {
+            add(HaDetailRow("Battery Charge", battSoc, highlight = true))
+            add(HaDetailRow("Live Solar PV", pvLiveText, highlight = pvLiveWatts > 0))
+            add(HaDetailRow("Solar Yield Today", solarToday))
+            add(HaDetailRow("AC House Load", acLoad))
+            stateMap.entries
+                .filter { (id, _) ->
+                    (id.contains("smartsolar") || id.contains("pylontech") || id.contains("gx_device")) &&
+                        id !in setOf(
+                            "sensor.smartsolar_charger_mppt_150_35_id_278_pv_yield_power",
+                            "sensor.smartsolar_charger_mppt_150_35_id_278_yield_today",
+                            "sensor.pylontech_battery_id_512_charge",
+                            "sensor.gx_device_consumption_power_l1"
+                        )
+                }
+                .sortedBy { it.key }
+                .take(8)
+                .forEach { (id, obj) ->
+                    val name = obj.optJSONObject("attributes")?.optString("friendly_name").orEmpty().ifBlank { id }
+                    val v = valWithUnit(id)
+                    if (v != "—") add(HaDetailRow(name, v))
+                }
+        }
 
         // 2. Temps & Lights
         val downTemp = valWithUnit("sensor.downstairs_temperature", 1)
         val upTemp = valWithUnit("sensor.upstairs_temperature", 1)
         val gardenTemp = valWithUnit("sensor.gardenroom_sensor_temperature", 1)
-        val lightsOnCount = trackedLights.count { id ->
-            stateMap[id]?.optString("state") == "on"
+
+        val allLightIds = (trackedLights + stateMap.keys.filter { it.startsWith("light.") && it !in trackedLights })
+            .distinct()
+        val lights = allLightIds.mapNotNull { id ->
+            val obj = stateMap[id] ?: return@mapNotNull null
+            val state = obj.optString("state", "off")
+            if (state == "unavailable") return@mapNotNull null
+            val attrs = obj.optJSONObject("attributes")
+            val name = attrs?.optString("friendly_name").orEmpty()
+                .ifBlank { id.removePrefix("light.").replace('_', ' ').replaceFirstChar { it.uppercase() } }
+            val brightnessRaw = attrs?.optInt("brightness", -1) ?: -1
+            val brightnessPct = if (state == "on" && brightnessRaw in 0..255) {
+                ((brightnessRaw * 100) / 255).coerceIn(1, 100)
+            } else null
+            HaLightItem(entityId = id, name = name, isOn = state == "on", brightnessPct = brightnessPct)
         }
+        val lightsOnCount = lights.count { it.isOn }
         val tempFooter = "Up $upTemp • Garden $gardenTemp • Lights $lightsOnCount On"
 
         // 3. Kia EV3
@@ -222,10 +290,32 @@ class HomeAssistantManager(
         val evProgress = evSoc.replace("%", "").trim().toIntOrNull() ?: 0
         val evRange = valWithUnit("sensor.ev3_ev_range", 0)
         val evPluggedRaw = stateMap["switch.evcs_hq2541kanh4_ev_charging"]?.optString("state") ?: "off"
-        val evPlugged = if (evPluggedRaw == "on") "Plugged On" else "Plugged Off"
+        val evPlugged = if (evPluggedRaw == "on") "Charging On" else "Charging Off"
         val evFooter = "Range $evRange • $evPlugged"
 
-        // 4. Phone Battery Levels
+        val evRows = buildList {
+            add(HaDetailRow("EV Battery", evSoc, highlight = true))
+            add(HaDetailRow("Estimated Range", evRange))
+            add(HaDetailRow("EV Charger Switch", evPlugged, highlight = evPluggedRaw == "on"))
+            stateMap.entries
+                .filter { (id, _) ->
+                    (id.contains("ev3") || id.contains("evcs")) &&
+                        id !in setOf(
+                            "sensor.ev3_ev_battery_level",
+                            "sensor.ev3_ev_range",
+                            "switch.evcs_hq2541kanh4_ev_charging"
+                        )
+                }
+                .sortedBy { it.key }
+                .take(10)
+                .forEach { (id, obj) ->
+                    val name = obj.optJSONObject("attributes")?.optString("friendly_name").orEmpty().ifBlank { id }
+                    val v = valWithUnit(id)
+                    if (v != "—") add(HaDetailRow(name, v))
+                }
+        }
+
+        // 4. Phone Battery Levels & Presence
         val neilBatt = valWithUnit("sensor.neil_iphone_neil_iphone1_battery_level", 0)
         val neilPct = neilBatt.replace("%", "").trim().toIntOrNull() ?: 0
         val hyslaBatt = valWithUnit("sensor.hyslas_iphone_battery_level", 0)
@@ -233,10 +323,25 @@ class HomeAssistantManager(
         val finnBatt = valWithUnit("sensor.finn_iphone_battery_level", 0)
         val finnPct = finnBatt.replace("%", "").trim().toIntOrNull() ?: 0
 
+        val phoneRows = buildList {
+            add(HaDetailRow("Neil iPhone", neilBatt, highlight = neilPct in 1..20))
+            add(HaDetailRow("Hysla iPhone", hyslaBatt, highlight = hyslaPct in 1..20))
+            add(HaDetailRow("Finn iPhone", finnBatt, highlight = finnPct in 1..20))
+            stateMap.entries
+                .filter { (id, _) -> id.startsWith("person.") }
+                .sortedBy { it.key }
+                .forEach { (id, obj) ->
+                    val name = obj.optJSONObject("attributes")?.optString("friendly_name").orEmpty().ifBlank { id }
+                    val state = obj.optString("state", "—")
+                    add(HaDetailRow("$name Location", state.replace('_', ' ').replaceFirstChar { it.uppercase() }))
+                }
+        }
+
         // Weather
-        val weatherObj = stateMap["weather.met_office"] 
+        val weatherObj = stateMap["weather.met_office"]
             ?: stateMap.entries.firstOrNull { it.key.startsWith("weather.") }?.value
-        val weatherTemp = weatherObj?.optJSONObject("attributes")?.optString("temperature", "")
+        val weatherAttrs = weatherObj?.optJSONObject("attributes")
+        val weatherTemp = weatherAttrs?.optString("temperature", "")
         val weatherCondition = weatherObj?.optString("state", "") ?: ""
         val weatherEmoji = when (weatherCondition.lowercase()) {
             "sunny", "clear-night" -> "☀️"
@@ -255,6 +360,38 @@ class HomeAssistantManager(
             "☁️ —"
         }
 
+        val climateRows = buildList {
+            add(HaDetailRow("Downstairs", downTemp, highlight = true))
+            add(HaDetailRow("Upstairs", upTemp))
+            add(HaDetailRow("Garden Room", gardenTemp))
+            if (weatherCondition.isNotBlank()) {
+                add(HaDetailRow("Outside Weather", "${weatherCondition.replaceFirstChar { it.uppercase() }} ($weatherText)"))
+            }
+            weatherAttrs?.optString("humidity", "")?.takeIf { it.isNotBlank() && it != "null" }?.let {
+                add(HaDetailRow("Outside Humidity", "$it%"))
+            }
+            weatherAttrs?.optString("wind_speed", "")?.takeIf { it.isNotBlank() && it != "null" }?.let {
+                val unit = weatherAttrs.optString("wind_speed_unit", "km/h")
+                add(HaDetailRow("Wind Speed", "$it $unit"))
+            }
+            stateMap.entries
+                .filter { (id, _) ->
+                    id.startsWith("climate.") ||
+                        (id.contains("temperature") && id !in setOf(
+                            "sensor.downstairs_temperature",
+                            "sensor.upstairs_temperature",
+                            "sensor.gardenroom_sensor_temperature"
+                        ))
+                }
+                .sortedBy { it.key }
+                .take(8)
+                .forEach { (id, obj) ->
+                    val name = obj.optJSONObject("attributes")?.optString("friendly_name").orEmpty().ifBlank { id }
+                    val v = valWithUnit(id, 1)
+                    if (v != "—") add(HaDetailRow(name, v))
+                }
+        }
+
         return DashboardData(
             solarPct = battSoc,
             solarProgress = solarProgress,
@@ -267,7 +404,16 @@ class HomeAssistantManager(
             neilPct = neilPct,
             hyslaPct = hyslaPct,
             finnPct = finnPct,
-            weatherText = weatherText
+            weatherText = weatherText,
+            details = SmartHomeDetails(
+                solarRows = solarRows,
+                climateRows = climateRows,
+                lights = lights,
+                evRows = evRows,
+                phoneRows = phoneRows,
+                lightsOnCount = lightsOnCount,
+                pvLiveText = pvLiveText
+            )
         )
     }
 
