@@ -267,16 +267,25 @@ class HomeAssistantManager(
         val upTemp = valWithUnit("sensor.upstairs_temperature", 1)
         val gardenTemp = valWithUnit("sensor.gardenroom_sensor_temperature", 1)
 
+        val excludedLightKeywords = listOf(
+            "ev3", "evcs", "car", "charger", "auto", "timer", "schedule",
+            "indicator", "backlight", "status", "led", "screen", "display",
+            "child_lock", "night_mode", "do_not_disturb"
+        )
         val extraLightOrSwitchIds = stateMap.entries
             .filter { (id, obj) ->
                 if (id in trackedLights) return@filter false
+                val friendly = obj.optJSONObject("attributes")?.optString("friendly_name").orEmpty()
+                val haystack = "$id $friendly".lowercase(Locale.US)
+                if (excludedLightKeywords.any { haystack.contains(it) }) return@filter false
                 if (id.startsWith("light.")) return@filter true
-                if (id.startsWith("switch.") && !id.contains("evcs")) {
-                    val friendly = obj.optJSONObject("attributes")?.optString("friendly_name").orEmpty()
-                    val haystack = "$id $friendly".lowercase(Locale.US)
-                    return@filter haystack.contains("light") ||
-                        haystack.contains("lamp") ||
-                        haystack.contains("garden")
+                if (id.startsWith("switch.")) {
+                    return@filter haystack.contains("lamp") ||
+                        haystack.contains("gardenroom") ||
+                        haystack.contains("garden room") ||
+                        haystack.contains("garden_room") ||
+                        haystack.contains("garden light") ||
+                        haystack.contains("lights")
                 }
                 false
             }
