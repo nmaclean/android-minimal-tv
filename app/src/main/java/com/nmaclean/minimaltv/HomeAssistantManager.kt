@@ -53,7 +53,7 @@ class HomeAssistantManager(
         Thread {
             var conn: HttpURLConnection? = null
             try {
-                val url = URL("$baseUrl/api/services/light/toggle")
+                val url = URL("$baseUrl/api/services/homeassistant/toggle")
                 conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     doOutput = true
@@ -267,15 +267,36 @@ class HomeAssistantManager(
         val upTemp = valWithUnit("sensor.upstairs_temperature", 1)
         val gardenTemp = valWithUnit("sensor.gardenroom_sensor_temperature", 1)
 
-        val allLightIds = (trackedLights + stateMap.keys.filter { it.startsWith("light.") && it !in trackedLights })
-            .distinct()
+        val extraLightOrSwitchIds = stateMap.entries
+            .filter { (id, obj) ->
+                if (id in trackedLights) return@filter false
+                if (id.startsWith("light.")) return@filter true
+                if (id.startsWith("switch.") && !id.contains("evcs")) {
+                    val friendly = obj.optJSONObject("attributes")?.optString("friendly_name").orEmpty()
+                    val haystack = "$id $friendly".lowercase(Locale.US)
+                    return@filter haystack.contains("light") ||
+                        haystack.contains("lamp") ||
+                        haystack.contains("garden")
+                }
+                false
+            }
+            .sortedBy { (id, obj) ->
+                obj.optJSONObject("attributes")?.optString("friendly_name").orEmpty().ifBlank { id }.lowercase(Locale.US)
+            }
+            .map { it.key }
+
+        val allLightIds = (trackedLights + extraLightOrSwitchIds).distinct()
         val lights = allLightIds.mapNotNull { id ->
             val obj = stateMap[id] ?: return@mapNotNull null
             val state = obj.optString("state", "off")
             if (state == "unavailable") return@mapNotNull null
             val attrs = obj.optJSONObject("attributes")
             val name = attrs?.optString("friendly_name").orEmpty()
-                .ifBlank { id.removePrefix("light.").replace('_', ' ').replaceFirstChar { it.uppercase() } }
+                .ifBlank {
+                    id.substringAfter('.')
+                        .replace('_', ' ')
+                        .replaceFirstChar { it.uppercase() }
+                }
             val brightnessRaw = attrs?.optInt("brightness", -1) ?: -1
             val brightnessPct = if (state == "on" && brightnessRaw in 0..255) {
                 ((brightnessRaw * 100) / 255).coerceIn(1, 100)
