@@ -1,9 +1,14 @@
 package com.nmaclean.minimaltv
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,8 +21,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -40,6 +49,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -49,6 +59,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import com.nmaclean.minimaltv.ui.theme.LiveClockHeader
 import com.nmaclean.minimaltv.ui.theme.MidnightCyanTokens
@@ -57,9 +68,22 @@ import com.nmaclean.minimaltv.ui.theme.TvTheme
 import com.nmaclean.minimaltv.ui.theme.focusCyanBorder
 import java.util.concurrent.Executors
 
+private enum class SettingsPage {
+    HUB,
+    GENERAL,
+    HOME_ASSISTANT
+}
+
+private data class SettingsHubOption(
+    val title: String,
+    val subtitle: String,
+    @DrawableRes val iconRes: Int,
+    val onClick: () -> Unit
+)
+
 /**
- * Midnight-Cyan Compose Settings screen for Home Assistant configuration,
- * on-demand local web setup server, and app updates/rollback.
+ * Midnight-Cyan Compose Settings Hub + sub-screens (General Settings, Home Assistant, App Updates),
+ * structured after android-tvheadend-tif's InputManagerActivity / GeneralSettingsActivity.
  */
 class SettingsActivity : ComponentActivity() {
 
@@ -84,7 +108,7 @@ class SettingsActivity : ComponentActivity() {
 
         setContent {
             TvTheme {
-                SettingsScreen()
+                SettingsHost()
             }
         }
     }
@@ -100,9 +124,221 @@ class SettingsActivity : ComponentActivity() {
         ioExecutor.shutdownNow()
     }
 
+    @Composable
+    private fun SettingsHost() {
+        var page by remember { mutableStateOf(SettingsPage.HUB) }
+
+        BackHandler(enabled = page != SettingsPage.HUB) {
+            if (page == SettingsPage.HOME_ASSISTANT) {
+                stopLocalConfigServer()
+            }
+            page = SettingsPage.HUB
+        }
+
+        when (page) {
+            SettingsPage.HUB -> SettingsHubScreen(
+                onOpenGeneral = { page = SettingsPage.GENERAL },
+                onOpenHomeAssistant = { page = SettingsPage.HOME_ASSISTANT },
+                onOpenUpdates = { UpdatePromptDialog(this@SettingsActivity).show() }
+            )
+            SettingsPage.GENERAL -> GeneralSettingsScreen(
+                onBack = { page = SettingsPage.HUB }
+            )
+            SettingsPage.HOME_ASSISTANT -> HomeAssistantSettingsScreen(
+                onBack = {
+                    stopLocalConfigServer()
+                    page = SettingsPage.HUB
+                }
+            )
+        }
+    }
+
     @OptIn(ExperimentalComposeUiApi::class, ExperimentalTvMaterial3Api::class)
     @Composable
-    private fun SettingsScreen() {
+    private fun SettingsHubScreen(
+        onOpenGeneral: () -> Unit,
+        onOpenHomeAssistant: () -> Unit,
+        onOpenUpdates: () -> Unit
+    ) {
+        val options = remember {
+            listOf(
+                SettingsHubOption(
+                    title = "General Settings",
+                    subtitle = "System settings, network, TV inputs & permissions",
+                    iconRes = R.drawable.ic_nav_settings,
+                    onClick = onOpenGeneral
+                ),
+                SettingsHubOption(
+                    title = "Home Assistant",
+                    subtitle = "Server URL, access token, browser setup & test",
+                    iconRes = R.drawable.ic_nav_home,
+                    onClick = onOpenHomeAssistant
+                ),
+                SettingsHubOption(
+                    title = "App Updates",
+                    subtitle = "Installed: v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})",
+                    iconRes = R.drawable.ic_nav_update,
+                    onClick = onOpenUpdates
+                )
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MidnightCyanTokens.BgGradientTop)
+                .padding(
+                    horizontal = MidnightCyanTokens.OverscanHorizontal,
+                    vertical = MidnightCyanTokens.OverscanVertical
+                )
+        ) {
+            SettingsHeader(
+                title = "Settings",
+                subtitle = "Configure MinimalTV, Home Assistant & app updates"
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp, start = 4.dp, end = 4.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusRestorer()
+            ) {
+                items(options, key = { it.title }) { option ->
+                    SettingsHubCard(option = option)
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalTvMaterial3Api::class)
+    @Composable
+    private fun SettingsHubCard(option: SettingsHubOption) {
+        var isFocused by remember { mutableStateOf(false) }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(124.dp)
+                .focusCyanBorder(isFocused = isFocused)
+                .clip(RoundedCornerShape(MidnightCyanTokens.CardCornerRadius))
+                .background(if (isFocused) MidnightCyanTokens.CardBgElevated else MidnightCyanTokens.CardBg)
+                .onFocusChanged { isFocused = it.isFocused }
+                .clickable(onClick = option.onClick)
+                .padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            Icon(
+                painter = painterResource(option.iconRes),
+                contentDescription = option.title,
+                tint = if (isFocused) MidnightCyanTokens.CyanAccent else MidnightCyanTokens.TextSecondary,
+                modifier = Modifier.size(34.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = option.title,
+                    color = MidnightCyanTokens.TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = option.subtitle,
+                    color = MidnightCyanTokens.TextSecondary,
+                    fontSize = 13.sp
+                )
+            }
+        }
+    }
+
+    @OptIn(ExperimentalComposeUiApi::class)
+    @Composable
+    private fun GeneralSettingsScreen(onBack: () -> Unit) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MidnightCyanTokens.BgGradientTop)
+                .padding(
+                    horizontal = MidnightCyanTokens.OverscanHorizontal,
+                    vertical = MidnightCyanTokens.OverscanVertical
+                )
+        ) {
+            SettingsHeader(
+                title = "General Settings",
+                subtitle = "Android TV system settings, inputs & app permissions",
+                onBack = onBack
+            )
+
+            Spacer(modifier = Modifier.height(22.dp))
+
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp, start = 4.dp, end = 4.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusRestorer()
+            ) {
+                item { SectionLabel("SYSTEM") }
+                item {
+                    SettingsRowItem(
+                        title = "Android TV Settings",
+                        summary = "Open device display, sound, apps & accounts settings",
+                        onClick = { launchAction(Settings.ACTION_SETTINGS) }
+                    )
+                }
+                item {
+                    SettingsRowItem(
+                        title = "Network & Wi-Fi",
+                        summary = "Configure Wi-Fi, Ethernet & IP address",
+                        onClick = { launchAction(Settings.ACTION_WIFI_SETTINGS, Settings.ACTION_SETTINGS) }
+                    )
+                }
+                item {
+                    SettingsRowItem(
+                        title = "System TV Inputs",
+                        summary = "Open Android TV hardware input selector",
+                        onClick = { launchAction("com.android.tv.action.VIEW_INPUTS", Settings.ACTION_SETTINGS) }
+                    )
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SectionLabel("APP & PERMISSIONS")
+                }
+                item {
+                    SettingsRowItem(
+                        title = "Install Unknown Apps",
+                        summary = "Required for in-app GitHub Releases APK updates",
+                        onClick = {
+                            val pkgUri = Uri.parse("package:$packageName")
+                            if (runCatching {
+                                    startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, pkgUri))
+                                }.isFailure
+                            ) {
+                                launchAction(Settings.ACTION_SETTINGS)
+                            }
+                        }
+                    )
+                }
+                item {
+                    SettingsRowItem(
+                        title = "MinimalTV Version",
+                        summary = "v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) • nmaclean/android-minimal-tv",
+                        badgeText = "v${BuildConfig.VERSION_NAME}",
+                        onClick = { UpdatePromptDialog(this@SettingsActivity).show() }
+                    )
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalComposeUiApi::class, ExperimentalTvMaterial3Api::class)
+    @Composable
+    private fun HomeAssistantSettingsScreen(onBack: () -> Unit) {
         val url by urlState
         val token by tokenState
         val savedUrlPreview by savedUrlPreviewState
@@ -121,40 +357,22 @@ class SettingsActivity : ComponentActivity() {
                     vertical = MidnightCyanTokens.OverscanVertical
                 )
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Settings",
-                        color = MidnightCyanTokens.TextPrimary,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "Home Assistant connection, browser setup & app updates",
-                        color = MidnightCyanTokens.TextSecondary,
-                        fontSize = 14.sp
-                    )
-                }
-                LiveClockHeader()
-            }
+            SettingsHeader(
+                title = "Home Assistant",
+                subtitle = "Server URL, long-lived token & browser paste setup",
+                onBack = onBack
+            )
 
             Spacer(modifier = Modifier.height(20.dp))
 
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(bottom = 24.dp),
+                contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp, start = 4.dp, end = 4.dp),
                 modifier = Modifier
                     .fillMaxSize()
                     .focusRestorer()
             ) {
-                item {
-                    SectionLabel("BROWSER SETUP")
-                }
-
+                item { SectionLabel("BROWSER SETUP") }
                 item {
                     Row(
                         modifier = Modifier
@@ -192,7 +410,6 @@ class SettingsActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(4.dp))
                     SectionLabel("HOME ASSISTANT CONNECTION")
                 }
-
                 item {
                     Column(
                         modifier = Modifier
@@ -248,56 +465,96 @@ class SettingsActivity : ComponentActivity() {
                         }
                     }
                 }
+            }
+        }
+    }
 
-                item {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    SectionLabel("APP & UPDATES")
+    @OptIn(ExperimentalTvMaterial3Api::class)
+    @Composable
+    private fun SettingsHeader(
+        title: String,
+        subtitle: String,
+        onBack: (() -> Unit)? = null
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                if (onBack != null) {
+                    TvPillButton(label = "← Back", selected = false, onClick = onBack)
                 }
+                Column {
+                    Text(
+                        text = title,
+                        color = MidnightCyanTokens.TextPrimary,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = subtitle,
+                        color = MidnightCyanTokens.TextSecondary,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+            LiveClockHeader()
+        }
+    }
 
-                item {
-                    var updateRowFocused by remember { mutableStateOf(false) }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusCyanBorder(isFocused = updateRowFocused)
-                            .clip(RoundedCornerShape(MidnightCyanTokens.CardCornerRadius))
-                            .background(
-                                if (updateRowFocused) MidnightCyanTokens.CardBgElevated
-                                else MidnightCyanTokens.CardBg
-                            )
-                            .onFocusChanged { updateRowFocused = it.isFocused }
-                            .clickable { UpdatePromptDialog(this@SettingsActivity).show() }
-                            .padding(horizontal = 20.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Check for Updates",
-                                color = MidnightCyanTokens.TextPrimary,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "Installed v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) • nmaclean/android-minimal-tv",
-                                color = MidnightCyanTokens.TextSecondary,
-                                fontSize = 13.sp
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(MidnightCyanTokens.BgGradientBottom)
-                                .padding(horizontal = 14.dp, vertical = 5.dp)
-                        ) {
-                            Text(
-                                text = "v${BuildConfig.VERSION_NAME}",
-                                color = MidnightCyanTokens.CyanAccent,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+    @OptIn(ExperimentalTvMaterial3Api::class)
+    @Composable
+    private fun SettingsRowItem(
+        title: String,
+        summary: String,
+        badgeText: String? = null,
+        onClick: () -> Unit
+    ) {
+        var isFocused by remember { mutableStateOf(false) }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .focusCyanBorder(isFocused = isFocused)
+                .clip(RoundedCornerShape(MidnightCyanTokens.CardCornerRadius))
+                .background(if (isFocused) MidnightCyanTokens.CardBgElevated else MidnightCyanTokens.CardBg)
+                .onFocusChanged { isFocused = it.isFocused }
+                .clickable(onClick = onClick)
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = MidnightCyanTokens.TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = summary,
+                    color = MidnightCyanTokens.TextSecondary,
+                    fontSize = 13.sp
+                )
+            }
+            if (badgeText != null) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(MidnightCyanTokens.BgGradientBottom)
+                        .padding(horizontal = 14.dp, vertical = 5.dp)
+                ) {
+                    Text(
+                        text = badgeText,
+                        color = MidnightCyanTokens.CyanAccent,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -401,6 +658,12 @@ class SettingsActivity : ComponentActivity() {
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.8.sp
         )
+    }
+
+    private fun launchAction(primary: String, fallback: String? = null) {
+        if (runCatching { startActivity(Intent(primary)) }.isFailure && fallback != null) {
+            runCatching { startActivity(Intent(fallback)) }
+        }
     }
 
     private fun startLocalConfigServer() {
