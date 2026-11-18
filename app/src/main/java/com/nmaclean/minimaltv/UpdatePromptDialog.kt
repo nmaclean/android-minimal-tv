@@ -16,6 +16,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import java.io.File
 import java.util.concurrent.Executors
 
@@ -302,7 +303,7 @@ class UpdatePromptDialog(private val context: Context) {
                 mainHandler.post {
                     if (cancelled || !d.isShowing) return@post
                     if (GitHubUpdater.installApk(context, apkFile)) {
-                        d.dismiss()
+                        showInstallingPrompt(release, apkFile)
                     } else {
                         showReadyToInstall(release, apkFile)
                     }
@@ -314,6 +315,28 @@ class UpdatePromptDialog(private val context: Context) {
                     }
                 }
             }
+        }
+    }
+
+    private fun showInstallingPrompt(release: GitHubReleaseInfo, apkFile: File) {
+        val d = dialog ?: return
+        if (!d.isShowing) return
+        progressBar.visibility = View.GONE
+        d.setTitle("Installing ${release.tagName}")
+        messageView.text = "Launching Android package installer…\nConfirm Install on the system prompt to finish updating."
+        Toast.makeText(context, "Installing ${release.tagName}…", Toast.LENGTH_LONG).show()
+        d.getButton(AlertDialog.BUTTON_NEUTRAL)?.visibility = View.GONE
+        d.getButton(AlertDialog.BUTTON_POSITIVE)?.apply {
+            text = "Retry Install"
+            visibility = View.VISIBLE
+            setOnClickListener {
+                GitHubUpdater.installApk(context, apkFile)
+            }
+        }
+        d.getButton(AlertDialog.BUTTON_NEGATIVE)?.apply {
+            text = "Close"
+            visibility = View.VISIBLE
+            requestFocus()
         }
     }
 
