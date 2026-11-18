@@ -77,7 +77,7 @@ private enum class SettingsPage {
 private data class SettingsHubOption(
     val title: String,
     val subtitle: String,
-    @DrawableRes val iconRes: Int,
+    @param:DrawableRes val iconRes: Int,
     val onClick: () -> Unit
 )
 
@@ -141,15 +141,8 @@ class SettingsActivity : ComponentActivity() {
                 onOpenHomeAssistant = { page = SettingsPage.HOME_ASSISTANT },
                 onOpenUpdates = { UpdatePromptDialog(this@SettingsActivity).show() }
             )
-            SettingsPage.GENERAL -> GeneralSettingsScreen(
-                onBack = { page = SettingsPage.HUB }
-            )
-            SettingsPage.HOME_ASSISTANT -> HomeAssistantSettingsScreen(
-                onBack = {
-                    stopLocalConfigServer()
-                    page = SettingsPage.HUB
-                }
-            )
+            SettingsPage.GENERAL -> GeneralSettingsScreen()
+            SettingsPage.HOME_ASSISTANT -> HomeAssistantSettingsScreen()
         }
     }
 
@@ -257,7 +250,10 @@ class SettingsActivity : ComponentActivity() {
 
     @OptIn(ExperimentalComposeUiApi::class)
     @Composable
-    private fun GeneralSettingsScreen(onBack: () -> Unit) {
+    private fun GeneralSettingsScreen() {
+        val firstItemFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { firstItemFocus.requestFocus() } }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -269,8 +265,7 @@ class SettingsActivity : ComponentActivity() {
         ) {
             SettingsHeader(
                 title = "General Settings",
-                subtitle = "Android TV system settings, inputs & app permissions",
-                onBack = onBack
+                subtitle = "Android TV system settings, inputs & app permissions"
             )
 
             Spacer(modifier = Modifier.height(22.dp))
@@ -287,7 +282,8 @@ class SettingsActivity : ComponentActivity() {
                     SettingsRowItem(
                         title = "Android TV Settings",
                         summary = "Open device display, sound, apps & accounts settings",
-                        onClick = { launchAction(Settings.ACTION_SETTINGS) }
+                        onClick = { launchAction(Settings.ACTION_SETTINGS) },
+                        modifier = Modifier.focusRequester(firstItemFocus)
                     )
                 }
                 item {
@@ -338,7 +334,7 @@ class SettingsActivity : ComponentActivity() {
 
     @OptIn(ExperimentalComposeUiApi::class, ExperimentalTvMaterial3Api::class)
     @Composable
-    private fun HomeAssistantSettingsScreen(onBack: () -> Unit) {
+    private fun HomeAssistantSettingsScreen() {
         val url by urlState
         val token by tokenState
         val savedUrlPreview by savedUrlPreviewState
@@ -347,6 +343,8 @@ class SettingsActivity : ComponentActivity() {
         val isTesting by isTestingState
         val webRunning by webServerRunningState
         val webBanner by webServerBannerState
+        val firstButtonFocus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { runCatching { firstButtonFocus.requestFocus() } }
 
         Column(
             modifier = Modifier
@@ -359,8 +357,7 @@ class SettingsActivity : ComponentActivity() {
         ) {
             SettingsHeader(
                 title = "Home Assistant",
-                subtitle = "Server URL, long-lived token & browser paste setup",
-                onBack = onBack
+                subtitle = "Server URL, long-lived token & browser paste setup"
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -401,7 +398,8 @@ class SettingsActivity : ComponentActivity() {
                             selected = webRunning,
                             onClick = {
                                 if (webRunning) stopLocalConfigServer() else startLocalConfigServer()
-                            }
+                            },
+                            modifier = Modifier.focusRequester(firstButtonFocus)
                         )
                     }
                 }
@@ -473,35 +471,25 @@ class SettingsActivity : ComponentActivity() {
     @Composable
     private fun SettingsHeader(
         title: String,
-        subtitle: String,
-        onBack: (() -> Unit)? = null
+        subtitle: String
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                if (onBack != null) {
-                    TvPillButton(label = "← Back", selected = false, onClick = onBack)
-                }
-                Column {
-                    Text(
-                        text = title,
-                        color = MidnightCyanTokens.TextPrimary,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = subtitle,
-                        color = MidnightCyanTokens.TextSecondary,
-                        fontSize = 14.sp
-                    )
-                }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = MidnightCyanTokens.TextPrimary,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = subtitle,
+                    color = MidnightCyanTokens.TextSecondary,
+                    fontSize = 14.sp
+                )
             }
             LiveClockHeader()
         }
@@ -513,12 +501,13 @@ class SettingsActivity : ComponentActivity() {
         title: String,
         summary: String,
         badgeText: String? = null,
-        onClick: () -> Unit
+        onClick: () -> Unit,
+        modifier: Modifier = Modifier
     ) {
         var isFocused by remember { mutableStateOf(false) }
 
         Row(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxWidth()
                 .focusCyanBorder(isFocused = isFocused)
                 .clip(RoundedCornerShape(MidnightCyanTokens.CardCornerRadius))
