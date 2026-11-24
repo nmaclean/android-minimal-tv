@@ -1,5 +1,17 @@
 package com.nmaclean.minimaltv
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -93,6 +105,64 @@ class MainActivity : ComponentActivity() {
             if (destination != TvNavDestination.APPS) destination = TvNavDestination.APPS
         }
 
+            var showRebootConfirm by remember { mutableStateOf(false) }
+
+    if (showRebootConfirm) {
+            Dialog(onDismissRequest = { showRebootConfirm = false }) {
+                Box(
+                    modifier = Modifier
+                        .background(MidnightCyanTokens.BgGradientTop)
+                        .padding(24.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        BasicText(
+                            text = "Reboot device?",
+                            style = TextStyle(
+                                color = Color.White,
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                        BasicText(
+                            text = "Are you sure you want to reboot this TV device now?",
+                            style = TextStyle(
+                                color = Color.White,
+                                fontSize = 15.sp
+                            )
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .clickable { showRebootConfirm = false }
+                                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                            ) {
+                                BasicText(
+                                    text = "Cancel",
+                                    style = TextStyle(color = Color.White)
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clickable {
+                                        showRebootConfirm = false
+                                        triggerDeviceReboot()
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                            ) {
+                                BasicText(
+                                    text = "Reboot",
+                                    style = TextStyle(
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Overlay rail over a fixed 64dp inset with a solid background to avoid full-screen gradient overdraw.
         Box(
             modifier = Modifier
@@ -129,7 +199,7 @@ class MainActivity : ComponentActivity() {
                         voiceStatus = voiceStatus,
                         onLaunchApp = launchApp
                     )
-                    TvNavDestination.REBOOT -> Unit
+                    TvNavDestination.REBOOT -> showRebootConfirm = true
                 }
             }
 
@@ -138,7 +208,7 @@ class MainActivity : ComponentActivity() {
                 onSelectDestination = { dest ->
                     if (dest == TvNavDestination.SETTINGS) openConfig() else destination = dest
                 },
-                onReboot = { triggerDeviceReboot() },
+                onReboot = { showRebootConfirm = true },
                 modifier = Modifier.align(Alignment.CenterStart)
             )
         }

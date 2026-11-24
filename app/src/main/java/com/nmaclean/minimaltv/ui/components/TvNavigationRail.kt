@@ -96,6 +96,12 @@ fun TvNavigationRail(
         }
 
         RailNavItem(
+            destination = TvNavDestination.REBOOT,
+            selected = false,
+            expanded = railHasFocus,
+            onClick = onReboot
+        )
+        RailNavItem(
             destination = TvNavDestination.SETTINGS,
             selected = selectedDestination == TvNavDestination.SETTINGS,
             expanded = railHasFocus,
@@ -104,12 +110,6 @@ fun TvNavigationRail(
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        RailNavItem(
-            destination = TvNavDestination.REBOOT,
-            selected = false,
-            expanded = railHasFocus,
-            onClick = onReboot
-        )
     }
 }
 
