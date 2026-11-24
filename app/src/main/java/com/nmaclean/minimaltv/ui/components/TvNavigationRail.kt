@@ -43,7 +43,8 @@ enum class TvNavDestination(val label: String, @DrawableRes val iconRes: Int) {
     APPS("Apps", R.drawable.ic_nav_apps),
     INPUTS("Inputs", R.drawable.ic_nav_input),
     SMART_HOME("Smart Home", R.drawable.ic_nav_home),
-    SETTINGS("Settings", R.drawable.ic_nav_settings)
+    SETTINGS("Settings", R.drawable.ic_nav_settings),
+    REBOOT("Reboot", R.drawable.ic_nav_update)
 }
 
 /**
@@ -54,6 +55,7 @@ enum class TvNavDestination(val label: String, @DrawableRes val iconRes: Int) {
 fun TvNavigationRail(
     selectedDestination: TvNavDestination,
     onSelectDestination: (TvNavDestination) -> Unit,
+    onReboot: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var railHasFocus by remember { mutableStateOf(false) }
@@ -98,6 +100,15 @@ fun TvNavigationRail(
             selected = selectedDestination == TvNavDestination.SETTINGS,
             expanded = railHasFocus,
             onClick = { onSelectDestination(TvNavDestination.SETTINGS) }
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        RailNavItem(
+            destination = TvNavDestination.REBOOT,
+            selected = false,
+            expanded = railHasFocus,
+            onClick = onReboot
         )
     }
 }

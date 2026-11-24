@@ -129,6 +129,7 @@ class MainActivity : ComponentActivity() {
                         voiceStatus = voiceStatus,
                         onLaunchApp = launchApp
                     )
+                    TvNavDestination.REBOOT -> Unit
                 }
             }
 
@@ -137,6 +138,7 @@ class MainActivity : ComponentActivity() {
                 onSelectDestination = { dest ->
                     if (dest == TvNavDestination.SETTINGS) openConfig() else destination = dest
                 },
+                onReboot = { triggerDeviceReboot() },
                 modifier = Modifier.align(Alignment.CenterStart)
             )
         }
@@ -215,5 +217,16 @@ class MainActivity : ComponentActivity() {
             finnPct = 0,
             weatherText = "☁️ —"
         )
+    }
+
+    private fun triggerDeviceReboot() {
+        runCatching {
+            val pm = getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+            pm?.reboot(null)
+        }.onFailure {
+            runCatching {
+                Runtime.getRuntime().exec(arrayOf("su", "-c", "reboot"))
+            }
+        }
     }
 }
