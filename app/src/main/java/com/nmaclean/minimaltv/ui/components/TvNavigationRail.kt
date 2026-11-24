@@ -95,20 +95,24 @@ fun TvNavigationRail(
             }
         }
 
-        RailNavItem(
-            destination = TvNavDestination.REBOOT,
-            selected = false,
-            expanded = railHasFocus,
-            onClick = onReboot
-        )
-        RailNavItem(
-            destination = TvNavDestination.SETTINGS,
-            selected = selectedDestination == TvNavDestination.SETTINGS,
-            expanded = railHasFocus,
-            onClick = { onSelectDestination(TvNavDestination.SETTINGS) }
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            RailNavItem(
+                destination = TvNavDestination.REBOOT,
+                selected = false,
+                expanded = railHasFocus,
+                onClick = onReboot
+            )
+            RailNavItem(
+                destination = TvNavDestination.SETTINGS,
+                selected = selectedDestination == TvNavDestination.SETTINGS,
+                expanded = railHasFocus,
+                onClick = { onSelectDestination(TvNavDestination.SETTINGS) }
+            )
+        }
 
     }
 }

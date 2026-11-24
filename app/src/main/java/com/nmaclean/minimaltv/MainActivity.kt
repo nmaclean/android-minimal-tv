@@ -107,61 +107,7 @@ class MainActivity : ComponentActivity() {
 
             var showRebootConfirm by remember { mutableStateOf(false) }
 
-    if (showRebootConfirm) {
-            Dialog(onDismissRequest = { showRebootConfirm = false }) {
-                Box(
-                    modifier = Modifier
-                        .background(MidnightCyanTokens.BgGradientTop)
-                        .padding(24.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        BasicText(
-                            text = "Reboot device?",
-                            style = TextStyle(
-                                color = Color.White,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                        BasicText(
-                            text = "Are you sure you want to reboot this TV device now?",
-                            style = TextStyle(
-                                color = Color.White,
-                                fontSize = 15.sp
-                            )
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Box(
-                                modifier = Modifier
-                                    .clickable { showRebootConfirm = false }
-                                    .padding(horizontal = 16.dp, vertical = 10.dp)
-                            ) {
-                                BasicText(
-                                    text = "Cancel",
-                                    style = TextStyle(color = Color.White)
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .clickable {
-                                        showRebootConfirm = false
-                                        triggerDeviceReboot()
-                                    }
-                                    .padding(horizontal = 16.dp, vertical = 10.dp)
-                            ) {
-                                BasicText(
-                                    text = "Reboot",
-                                    style = TextStyle(
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    
 
         // Overlay rail over a fixed 64dp inset with a solid background to avoid full-screen gradient overdraw.
         Box(
@@ -199,7 +145,7 @@ class MainActivity : ComponentActivity() {
                         voiceStatus = voiceStatus,
                         onLaunchApp = launchApp
                     )
-                    TvNavDestination.REBOOT -> showRebootConfirm = true
+                    TvNavDestination.REBOOT -> triggerDeviceReboot()
                 }
             }
 
@@ -208,7 +154,7 @@ class MainActivity : ComponentActivity() {
                 onSelectDestination = { dest ->
                     if (dest == TvNavDestination.SETTINGS) openConfig() else destination = dest
                 },
-                onReboot = { showRebootConfirm = true },
+                onReboot = { triggerDeviceReboot() },
                 modifier = Modifier.align(Alignment.CenterStart)
             )
         }
@@ -290,12 +236,26 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun triggerDeviceReboot() {
-        runCatching {
+        val pmAttempt = runCatching {
             val pm = getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
             pm?.reboot(null)
-        }.onFailure {
-            runCatching {
-                Runtime.getRuntime().exec(arrayOf("su", "-c", "reboot"))
+            true
+        }.getOrDefault(false)
+
+        if (!pmAttempt) {
+            val intentAttempt = runCatching {
+                startActivity(
+                    Intent(Intent.ACTION_REBOOT).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                )
+                true
+            }.getOrDefault(false)
+
+            if (!intentAttempt) {
+                runCatching {
+                    Runtime.getRuntime().exec(arrayOf("su", "-c", "reboot"))
+                }
             }
         }
     }
