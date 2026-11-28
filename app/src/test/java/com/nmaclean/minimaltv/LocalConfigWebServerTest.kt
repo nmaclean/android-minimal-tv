@@ -38,16 +38,30 @@ class LocalConfigWebServerTest {
     }
 
     @Test
-    fun handleSavePost_rejectsMissingUrlOrToken() {
+    fun handleSavePost_rejectsWhenBothUrlAndTokenBlank() {
         val prefs = HomeAssistantPreferences(TestSharedPreferences())
 
-        val missingToken = LocalConfigWebServer.handleSavePost("url=ha.example.com&token=+++", prefs)
-        assertFalse(missingToken.success)
+        val bothBlank = LocalConfigWebServer.handleSavePost("url=+++&token=+++", prefs)
+        assertFalse(bothBlank.success)
         assertFalse(prefs.isConfigured())
+    }
 
-        val missingUrl = LocalConfigWebServer.handleSavePost("url=&token=abc123", prefs)
-        assertFalse(missingUrl.success)
-        assertFalse(prefs.isConfigured())
+    @Test
+    fun handleSavePost_allowsUpdatingOnlyUrlOrOnlyToken() {
+        val prefs = HomeAssistantPreferences(TestSharedPreferences())
+        prefs.save("https://initial.example.com", "initial-token-1234")
+
+        val urlOnly = LocalConfigWebServer.handleSavePost("url=new.ha.example.com%2F&token=", prefs)
+        assertTrue(urlOnly.success)
+        assertEquals("https://new.ha.example.com", urlOnly.savedUrl)
+        assertEquals("https://new.ha.example.com", prefs.getUrl())
+        assertEquals("initial-token-1234", prefs.getToken())
+
+        val tokenOnly = LocalConfigWebServer.handleSavePost("url=&token=+rotated-token-5678+", prefs)
+        assertTrue(tokenOnly.success)
+        assertEquals("https://new.ha.example.com", tokenOnly.savedUrl)
+        assertEquals("https://new.ha.example.com", prefs.getUrl())
+        assertEquals("rotated-token-5678", prefs.getToken())
     }
 
     @Test

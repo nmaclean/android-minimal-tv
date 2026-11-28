@@ -261,17 +261,20 @@ class LocalConfigWebServer(
             val normalizedUrl = HomeAssistantPreferences.normalizeUrl(rawUrl)
             val trimmedToken = rawToken.trim()
 
-            if (normalizedUrl.isEmpty() || trimmedToken.isEmpty()) {
+            if (normalizedUrl.isBlank() && trimmedToken.isBlank()) {
                 return SaveResult(
                     success = false,
-                    message = "Both Home Assistant URL and Long-Lived Access Token are required."
+                    message = "Provide a Home Assistant URL or Long-Lived Access Token to update."
                 )
             }
 
-            preferences.save(normalizedUrl, trimmedToken)
+            val finalUrl = normalizedUrl.ifBlank { preferences.getUrl() }
+            val finalToken = trimmedToken.ifBlank { preferences.getToken() }
+
+            preferences.save(finalUrl, finalToken)
             return SaveResult(
                 success = true,
-                savedUrl = normalizedUrl,
+                savedUrl = finalUrl,
                 message = "Saved! You can close this page."
             )
         }
@@ -406,13 +409,13 @@ class LocalConfigWebServer(
                 <body>
                   <div class="card">
                     <h1>MinimalTV Setup</h1>
-                    <p>Paste your Home Assistant URL and Long-Lived Access Token below.</p>
+                    <p>Update either your Home Assistant URL or Long-Lived Access Token (or both) below.</p>
                     <form method="POST" action="/save">
                       <label for="url">Home Assistant URL</label>
-                      <input id="url" name="url" type="text" value="$escapedUrl" placeholder="" required />
+                      <input id="url" name="url" type="text" value="$escapedUrl" placeholder="" />
 
                       <label for="token">Long-Lived Access Token</label>
-                      <textarea id="token" name="token" placeholder="Paste your Home Assistant Long-Lived Access Token here" required></textarea>
+                      <textarea id="token" name="token" placeholder="Paste your Home Assistant Long-Lived Access Token here (leave blank to keep existing)"></textarea>
 
                       <button type="submit">Save Configuration</button>
                     </form>
